@@ -17,6 +17,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <errno.h>
+#include <netdb.h>
 
 // Global declaration
 
@@ -31,6 +32,25 @@ struct client_list {
 
 static struct client_list write_head, read_head;
 
+int resolveHost(char * hostname , char* ip)
+{
+	struct hostent *hent;
+	struct in_addr **addr_list;
+	int i;
+	if ( (hent = gethostbyname( hostname ) ) == NULL)
+	{
+		herror("gethostbyname error");             
+		return 1;     
+	}     
+	addr_list = (struct in_addr **) hent->h_addr_list;     
+	for(i = 0; addr_list[i] != NULL; i++)     
+	{             
+		strcpy(ip , inet_ntoa(*addr_list[i]));             
+		return 0;     
+	}     
+	return 1;
+}
+
 /*
  * function_name : main.
  * description   : Main function to initialize the server socket dameon and serve
@@ -43,7 +63,8 @@ static struct client_list write_head, read_head;
 int main( int tiv, char **const iv)
 {
 	// Socket Initializers
-	char *ip = "127.0.0.1";
+	char ip[100] = {'\0'};
+	char *hostname= "messenger.ddns.net";
   	int port = 5590;
   	static FILE *client_List, *temp_file;
 
@@ -58,6 +79,12 @@ int main( int tiv, char **const iv)
 	char buffer[1024], *dest, *source, *msg_to_send;
 	char tmp[50];
 
+	if(resolveHost(hostname, ip))
+	{
+		printf("Failed to resolve Hostname\n");
+		return 0;
+	}
+	printf("Initialiazing server  with IP:%s\n", ip);
 	for( client_loop =0; client_loop< MAX_CLIENTS; client_loop++)
 	{
 		client_connection[client_loop]=0;
@@ -84,7 +111,7 @@ int main( int tiv, char **const iv)
 	// Step:3 Bind the IP address to the created file descriptor
 	server_address.sin_family=AF_INET;
 	server_address.sin_port=port;
-	server_address.sin_addr.s_addr=inet_addr(ip);;
+	server_address.sin_addr.s_addr=INADDR_ANY;
 	
 	if( bind(server_daemon, (struct sockaddr*)&server_address, sizeof(server_address)) < 0 )
 	{
@@ -187,6 +214,11 @@ int main( int tiv, char **const iv)
         		msg_to_send=strtok(NULL, "#");
         		printf("Debug \ndest : %s\nsource : %s\nmsg_to_send : %s\nclient_ID: %d\n", dest,source,msg_to_send,client_fd);
         		printf("%s : %s\n", source,msg_to_send);
+				if(source == NULL || dest == NULL)
+				{
+					client_connection[client_loop]=0;
+					break;
+				}
 				if (msg_to_send != NULL)
 				{
             		client_List = fopen("/tmp/client_list.bin", "rb");
